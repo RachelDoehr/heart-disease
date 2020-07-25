@@ -39,6 +39,8 @@ class DatasetMaker():
         self.graphics_path = Path(__file__).resolve().parents[2].joinpath('reports').resolve().joinpath('figures').resolve()
         self.data_path = Path(__file__).resolve().parents[2].joinpath('data').resolve().joinpath('processed').resolve()
 
+        self.transformed_df = pd.DataFrame()
+
     def get_data(self):
 
         '''Reads in csv from s3'''
@@ -73,6 +75,7 @@ class DatasetMaker():
 
         pth = Path(self.graphics_path, 'continous_variables_dist').with_suffix('.png')
         plt.savefig(pth)
+        self.logger.info('Graphed and saved continous variable distribution plots in /reports/figures...')
  
     def visualize_categorical(self):
 
@@ -108,6 +111,7 @@ class DatasetMaker():
         
         pth = Path(self.graphics_path, 'categorical_variables_dist').with_suffix('.png')
         plt.savefig(pth)
+        self.logger.info('Graphed and saved distribution plots in /reports/figures...')
 
     def visualize_scatter(self):
 
@@ -124,52 +128,47 @@ class DatasetMaker():
         plt.suptitle('Pairwise Scatterplot of Continous Variables by Target')
         pth = Path(self.graphics_path, 'categorical_variables_scatterpair').with_suffix('.png')
         plt.savefig(pth)
+        self.logger.info('Graphed and saved scatter plots of categorical variables in /reports/figures...')
 
-    def explore_correlations(self):
+    def preprocess_df(self):
 
-        '''Visualize correlations of post-transformed data'''
-        correl = self.transformed_df.iloc[1:,60:]
-        corr = correl.corr()
-        # generate a mask for the upper triangle
-        mask = np.zeros_like(corr, dtype=np.bool)
-        mask[np.triu_indices_from(mask)] = True
+        '''Creates dummies for categorical vars. Scaling saved for after splitting into train/test'''
+        
+        categorical_list = ['cp', 'restecg', 'slope', 'ca', 'thal']
+        
+        for f in categorical_list:
+            self.transformed_df[f] = self.raw_df[f].astype('object')
+        df = pd.get_dummies(self.transformed_df, prefix = ['cp_', 'restecg_', 'slope_', 'ca_', 'thal_'])
+        
+        # augment with the binary variables
+        df = pd.concat([df, self.raw_df[['sex', 'target', 'exang']]], axis=1)
 
-        f, ax = plt.subplots(figsize=(17, 17))
+        # augment with the continous variables
+        self.preprocessed_df = pd.concat([df, self.raw_df[['age', 'trestbps', 'chol', 'thalach', 'oldpeak']]], axis=1)
+        self.logger.info('Created dummy variables where needed...')
 
-        # generate a custom diverging colormap
-        cmap = sns.diverging_palette(10, 220, as_cmap=True)
+    def final_save(self):
 
-        # Draw the heatmap with the mask and correct aspect ratio
-        sns.heatmap(corr, mask=mask, cmap=cmap, center=0, ax=ax,
-                    square=True, linewidths=.2, cbar_kws={"shrink": 0.5})
-        pth = Path(self.graphics_path, 'correlation_matrix_1').with_suffix('.png')
-        f.savefig(pth)
-        self.logger.info('plotted and save figures in /reports/figures/')
+        '''Saves the data locally and to s3'''
 
-    def final_prep_and_save(self):
-        '''Removes the columns with significant null values. Can also remove outlier series, nonborrowed reserves.
-        Then saves copies.'''
-        self.logger.info('removing nulls and outliers, saving...')
-        to_remove = ['ACOGNO', 'S&P PE ratio', 'TWEXAFEGSMTHx', 'UMCSENTx'] # leaving reserves in for now
-
-        self.features_df = self.transformed_df.drop(to_remove, axis=1).iloc[1:, :]
+        self.logger.info('Saving the data in /data/features and to s3...')
 
         pth = Path(self.data_path, 'features').with_suffix('.csv')
-        self.features_df.to_csv(pth)
+        self.preprocessed_df.to_csv(pth)
         # upload to s3
         csv_buffer = StringIO()
-        self.features_df.to_csv(csv_buffer)
+        self.preprocessed_df.to_csv(csv_buffer)
         s3_resource = boto3.resource('s3')
         s3_resource.Object(BUCKET, 'features.csv').put(Body=csv_buffer.getvalue())
 
     def execute_dataprep(self):
 
         self.get_data()
-        #self.visualize_continuous()
-        #self.visualize_categorical()
+        self.visualize_continuous()
+        self.visualize_categorical()
         self.visualize_scatter()
-        #self.explore_correlations()
-        #self.final_prep_and_save()
+        self.preprocess_df()
+        self.final_save()
 
 def main():
     """ Runs data processing scripts to turn raw data from s3 into
