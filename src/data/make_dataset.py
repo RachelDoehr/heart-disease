@@ -74,6 +74,57 @@ class DatasetMaker():
         pth = Path(self.graphics_path, 'continous_variables_dist').with_suffix('.png')
         plt.savefig(pth)
  
+    def visualize_categorical(self):
+
+        '''Explore the distributions of categorical and binary variables'''
+
+        categorical_features = [
+            ['sex', 0, 0, 'Sex'],
+            ['target', 0, 2, 'Heart Disease'],
+            ['cp', 0, 1, 'Chest Pain Type'],
+            ['ca', 1, 0, 'No of Major Vessels Colored by Flouroscopy'],
+            ['thal', 1, 1, 'Thalassemia'],
+            ['fbs', 2, 0, 'Fasting Blood Sugar (>120mg/dl)'],
+            ['restecg', 2, 1, 'Resting ECG Results'], 
+            ['exang', 2, 2, 'Exercise Induced Angia'],
+            ['slope', 1, 2, 'Slope of Peak Exercise ST Segment']
+        ]
+        # Draw
+        plt.figure(figsize=(12, 12), dpi=80)
+        plt.suptitle('Heart Disease Predictors: Distributions of Categorical Variables', y=0.9, fontsize=14)
+        gs = gridspec.GridSpec(3, 3)
+        
+        for idx, v in enumerate(categorical_features):
+            
+            plt.subplot(gs[v[1], v[2]])
+            if v[0] == 'target':
+                ax = sns.countplot(self.raw_df[v[0]], color='gray')
+            else:
+                ax = sns.countplot(self.raw_df[v[0]], color='deepskyblue', alpha=0.6)
+            plt.xlabel(v[3], fontsize=8)
+            plt.ylabel('Total Count', fontsize=8)
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+        
+        pth = Path(self.graphics_path, 'categorical_variables_dist').with_suffix('.png')
+        plt.savefig(pth)
+
+    def visualize_scatter(self):
+
+        '''Pairwise correlations visually by target type'''
+
+        c_vars = ['age', 'trestbps', 'chol', 'thalach', 'oldpeak']
+        colMap={0: "gray", 1: "blue"}
+        colors=list(map(lambda x:colMap.get(x), self.raw_df.target))
+
+        # Create a scatter matrix from the dataframe, color by y_train
+        grr = pd.plotting.scatter_matrix(self.raw_df[c_vars], c=colors, figsize=(10, 10), marker='o',
+                                        hist_kwds={'bins': 20}, s=5)
+        plt.legend()
+        plt.suptitle('Pairwise Scatterplot of Continous Variables by Target')
+        pth = Path(self.graphics_path, 'categorical_variables_scatterpair').with_suffix('.png')
+        plt.savefig(pth)
+
     def explore_correlations(self):
 
         '''Visualize correlations of post-transformed data'''
@@ -114,7 +165,9 @@ class DatasetMaker():
     def execute_dataprep(self):
 
         self.get_data()
-        self.visualize_continuous()
+        #self.visualize_continuous()
+        #self.visualize_categorical()
+        self.visualize_scatter()
         #self.explore_correlations()
         #self.final_prep_and_save()
 
