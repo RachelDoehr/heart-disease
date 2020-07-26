@@ -113,6 +113,39 @@ class DatasetMaker():
         plt.savefig(pth)
         self.logger.info('Graphed and saved distribution plots in /reports/figures...')
 
+    def visualize_categorical_by_tgt(self):
+    
+        '''Explore the distributions of categorical and binary variables'''
+
+        categorical_features = [
+            ['sex', 0, 0, 'Sex'],
+            ['cp', 0, 1, 'Chest Pain Type'],
+            ['ca', 1, 0, 'No of Major Vessels Colored by Flouroscopy'],
+            ['thal', 1, 1, 'Thalassemia'],
+            ['fbs', 2, 0, 'Fasting Blood Sugar (>120mg/dl)'],
+            ['restecg', 2, 1, 'Resting ECG Results'], 
+            ['exang', 2, 2, 'Exercise Induced Angia'],
+            ['slope', 1, 2, 'Slope of Peak Exercise ST Segment']
+        ]
+        # Draw
+        for idx, v in enumerate(categorical_features):
+
+            plt.figure(figsize=(6, 6), dpi=80)
+            ax = sns.catplot(
+                "target",
+                col=v[0],
+                data=self.raw_df,
+                kind="count",
+                height=3.5,
+                aspect=.8, 
+                palette=sns.color_palette("bright", 2)
+            )
+            plt.suptitle(v[3], fontsize=8)
+            pth = Path(self.graphics_path, v[0]+'_by_target').with_suffix('.png')
+            plt.savefig(pth)
+
+        self.logger.info('Graphed and saved distribution plots in /reports/figures...')
+
     def visualize_scatter(self):
 
         '''Pairwise correlations visually by target type'''
@@ -129,6 +162,39 @@ class DatasetMaker():
         pth = Path(self.graphics_path, 'categorical_variables_scatterpair').with_suffix('.png')
         plt.savefig(pth)
         self.logger.info('Graphed and saved scatter plots of categorical variables in /reports/figures...')
+    
+    def visualize_continous_by_tgt(self):
+
+        '''Kde estimate of distributions by target=0 or target=1, overlaid'''
+
+        continous_features = [
+            ['age', 0, 0, 'Age'],
+            ['trestbps', 0, 1, 'Resting Blood Pressure'],
+            ['chol', 1, 0, 'Cholesterol (mg/dl)'],
+            ['thalach', 1, 1, 'Maximum Heart Rate (bpm)'],
+            ['oldpeak', 2, 0, 'ST Depression in Exercise Relative to Rest']
+        ]
+        # Draw
+        plt.figure(figsize=(10, 10), dpi=80)
+        plt.suptitle('Heart Disease Predictors: Distributions by Target=0 (no cardiac disease) or Target=1', y=0.9, fontsize=14)
+        gs = gridspec.GridSpec(3, 2)
+        no_disease = self.raw_df[self.raw_df.target == 0]
+        diseased = self.raw_df[self.raw_df.target == 1]
+
+        for idx, v in enumerate(continous_features):
+            
+            plt.subplot(gs[v[1], v[2]])
+            ax = sns.kdeplot(diseased[v[0]], color="deepskyblue", alpha=0.5, shade=True, label='Heart Disease')
+            sns.kdeplot(no_disease[v[0]], color="lime", alpha=0.3, ax=ax, shade=True, label='No Disease')
+            plt.xlabel(v[3], fontsize=8)
+            plt.legend()
+            plt.ylabel('Kernel density estimation', fontsize=8)
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+
+        pth = Path(self.graphics_path, 'continous_variables_by_target').with_suffix('.png')
+        plt.savefig(pth)
+        self.logger.info('Graphed and saved continous variable distribution plots in /reports/figures...')
 
     def preprocess_df(self):
 
@@ -164,11 +230,13 @@ class DatasetMaker():
     def execute_dataprep(self):
 
         self.get_data()
-        self.visualize_continuous()
-        self.visualize_categorical()
-        self.visualize_scatter()
-        self.preprocess_df()
-        self.final_save()
+        #self.visualize_continuous()
+        #self.visualize_categorical()
+        #self.visualize_continous_by_tgt()
+        self.visualize_categorical_by_tgt()
+        #self.visualize_scatter()
+        #self.preprocess_df()
+        #self.final_save()
 
 def main():
     """ Runs data processing scripts to turn raw data from s3 into
