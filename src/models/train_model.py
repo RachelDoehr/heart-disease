@@ -21,6 +21,8 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import mean_squared_error
 from sklearn.pipeline import Pipeline
 from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import AdaBoostClassifier
+from sklearn.tree import DecisionTreeClassifier
 import pandas as pd
 from plot_metric.functions import BinaryClassification
 import numpy as np
@@ -83,6 +85,13 @@ class HeartDiseaseModels():
                 ('rf', RandomForestClassifier(random_state=42))
             ]
         )
+        self.ada_pipe = Pipeline(
+            [
+                ('scaler', StandardScaler()),
+                #('feature_selector', SelectFromModel(LinearSVC(random_state=42), threshold=-np.inf, max_features=26)),
+                ('ada', AdaBoostClassifier())
+            ]
+        )
         # Parameters of pipelines
         self.logreg_param_grid = {
             'logreg__C': np.logspace(-4, 4, 4),
@@ -92,6 +101,17 @@ class HeartDiseaseModels():
             'rf__max_depth': [int(x) for x in np.linspace(10, 110, num=11)],
             'rf__bootstrap': [True, False]
         }
+        # auto generate a range of base decision stumps
+        base_estimators = []
+        for jj in range(1, 111, 11):
+            base_estimators.append(DecisionTreeClassifier(max_depth=jj, min_samples_leaf=1, random_state=42))
+        
+        self.ada_param_grid = {
+            'ada__base_estimator': base_estimators,
+            'ada__learning_rate': np.logspace(-4, 4, 4), # effectively regularization
+            'ada__n_estimators': [int(x) for x in np.linspace(start=200, stop=1000, num=10)],
+            'ada__algorithm': ['SAMME', 'SAMME.R']
+        }
         self.logger.info('built training and scaling pipelines...')
 
     def train_pipelines(self):
@@ -100,7 +120,7 @@ class HeartDiseaseModels():
 
         self.best_models = []
         
-        for m, p in zip([self.logreg_pipe, self.rf_pipe], [self.logreg_param_grid, self.rf_param_grid]):
+        for m, p in zip([self.logreg_pipe, self.rf_pipe, self.ada_pipe], [self.logreg_param_grid, self.rf_param_grid, self.ada_param_grid]):
 
             search = GridSearchCV(m, p, n_jobs=-1)
             search.fit(self.X_train, self.y_train)
@@ -117,7 +137,7 @@ class HeartDiseaseModels():
         self.yhats_test = []
         self.probas_test = []
 
-        for m, l in zip(self.best_models, ['Logistic Regression', 'Random Forest']):
+        for m, l in zip(self.best_models, ['Logistic Regression', 'Random Forest', 'AdaBoost']):
             print('+++++++++++++++++++++++++++++++++++')
             print('ERRORS: TEST SET')
             print('Model: ', l)
@@ -188,7 +208,7 @@ class HeartDiseaseModels():
 
     def gen_error_graphics(self):
 
-        for y, l in zip(self.yhats_test, ['Logistic_Regression', 'Random_Forest']):
+        for y, l in zip(self.yhats_test, ['Logistic_Regression', 'Random_Forest', 'AdaBoost']):
 
             self.plot_confusion_matrix(
                 y_true=self.y_test,
@@ -198,7 +218,7 @@ class HeartDiseaseModels():
                 name=l,
                 title='Confusion Matrix: Test Set'
             )
-        for p, l in zip(self.probas_test, ['Logistic_Regression', 'Random_Forest']):
+        for p, l in zip(self.probas_test, ['Logistic_Regression', 'Random_Forest', 'AdaBoost']):
             
             self.plot_roc_curve(name=l, yproba=p[:, 1])
 
