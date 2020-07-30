@@ -15,6 +15,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.feature_selection import SelectFromModel
 from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
 from sklearn.svm import LinearSVC
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import mean_squared_error
@@ -71,38 +72,61 @@ class HeartDiseaseModels():
         self.logreg_pipe = Pipeline(
             [
                 ('scaler', StandardScaler()),
-                ('feature_selector', SelectFromModel(LinearSVC(random_state=42), threshold=-np.inf, max_features=20)),
-                ('logreg', LogisticRegression(random_state=42))
+                #('feature_selector', SelectFromModel(LinearSVC(random_state=42), threshold=-np.inf, max_features=26)),
+                ('logreg', LogisticRegression(random_state=42, max_iter=200))
+            ]
+        )
+        self.rf_pipe = Pipeline(
+            [
+                ('scaler', StandardScaler()),
+                #('feature_selector', SelectFromModel(LinearSVC(random_state=42), threshold=-np.inf, max_features=26)),
+                ('rf', RandomForestClassifier(random_state=42))
             ]
         )
         # Parameters of pipelines
         self.logreg_param_grid = {
             'logreg__C': np.logspace(-4, 4, 4),
         }
-       
+        self.rf_param_grid = {
+            'rf__n_estimators': [int(x) for x in np.linspace(start=200, stop=1000, num=10)],
+            'rf__max_depth': [int(x) for x in np.linspace(10, 110, num=11)],
+            'rf__bootstrap': [True, False]
+        }
+        self.logger.info('built training and scaling pipelines...')
 
-    def run_pipelines(self):
+    def train_pipelines(self):
 
         '''Runs the cross-validation training of the pipelines set up, reports best params.'''
+
+        self.best_models = []
         
-        search = GridSearchCV(self.logreg_pipe, self.logreg_param_grid, n_jobs=-1)
-        search.fit(self.X_train, self.y_train)
-        print("Best parameter (CV score=%0.3f):" % search.best_score_)
-        print(search.best_params_)
-        self.best_logreg = search.best_estimator_
+        for m, p in zip([self.logreg_pipe, self.rf_pipe], [self.logreg_param_grid, self.rf_param_grid]):
+
+            search = GridSearchCV(m, p, n_jobs=-1)
+            search.fit(self.X_train, self.y_train)
+            print("Best parameter (CV score=%0.3f):" % search.best_score_)
+            print(search.best_params_)
+
+            self.best_models.append(search.best_estimator_)
+            self.logger.info('trained one grid search for one pipeline...')
     
     def classification_reports(self):
 
         '''Post training, creates error reports and confusion matrices.'''
 
-        print('+++++++++++++++++++++++++++++++++++')
-        print('LOGISTIC REGRESSION ERRORS: TEST SET')
+        self.yhats_test = []
+        self.probas_test = []
 
-        self.logreg_yhat_test = self.best_logreg.predict(self.X_test)
-        self.logreg_proba_test = self.best_logreg.predict_proba(self.X_test)
+        for m, l in zip(self.best_models, ['Logistic Regression', 'Random Forest']):
+            print('+++++++++++++++++++++++++++++++++++')
+            print('ERRORS: TEST SET')
+            print('Model: ', l)
 
-        print(classification_report(self.logreg_yhat_test, self.y_test))
-        print('Accuracy score: %0.3f' % accuracy_score(self.logreg_yhat_test, self.y_test))
+            self.yhats_test.append(m.predict(self.X_test))
+            self.probas_test.append(m.predict_proba(self.X_test))
+
+            print(classification_report(m.predict(self.X_test), self.y_test))
+            print('Accuracy score: %0.3f' % accuracy_score(m.predict(self.X_test), self.y_test))
     
     def plot_confusion_matrix(self, y_true, y_pred, classes, name, normalize=False, title=None, cmap='bwr'):
 
@@ -149,12 +173,12 @@ class HeartDiseaseModels():
         pth = Path(self.graphics_path, 'conf_matrix_'+name).with_suffix('.png')
         plt.savefig(pth)
     
-    def plot_roc_curve(self, name):
+    def plot_roc_curve(self, yproba, name):
 
         '''Plots the ROC curve for given model (by definition requires a model that can gen probabilities)'''
 
         # Visualisation with plot_metric
-        bc = BinaryClassification(self.y_test, self.logreg_proba_test[:,1], labels=["No Disease", "Heart Disease"])
+        bc = BinaryClassification(self.y_test, yproba, labels=["No Disease", "Heart Disease"])
 
         # Figures
         plt.figure(figsize=(6, 6))
@@ -162,23 +186,33 @@ class HeartDiseaseModels():
         pth = Path(self.graphics_path, 'roc_curve_'+name).with_suffix('.png')
         plt.savefig(pth)
 
+    def gen_error_graphics(self):
+
+        for y, l in zip(self.yhats_test, ['Logistic_Regression', 'Random_Forest']):
+
+            self.plot_confusion_matrix(
+                y_true=self.y_test,
+                y_pred=y,
+                classes=['No Disease', 'Heart Disease'],
+                normalize=True,
+                name=l,
+                title='Confusion Matrix: Test Set'
+            )
+        for p, l in zip(self.probas_test, ['Logistic_Regression', 'Random_Forest']):
+            
+            self.plot_roc_curve(name=l, yproba=p[:, 1])
+
+        self.logger.info('plotted confusion matrices and ROC curves in /reports/figures/...')
+
     def execute_analysis(self):
 
         '''Runs the necessary methods'''
 
         self.get_data()
         self.prep_data_pipelines()
-        self.run_pipelines()
+        self.train_pipelines()
         self.classification_reports()
-        self.plot_confusion_matrix(
-            y_true=self.y_test,
-            y_pred=self.logreg_yhat_test,
-            classes=['No Disease', 'Heart Disease'],
-            normalize=True,
-            name='logreg',
-            title='Confusion Matrix: Logistic Regression'
-        )
-        self.plot_roc_curve(name='logreg')
+        self.gen_error_graphics()
 
 def main():
 
