@@ -81,18 +81,23 @@ class HeartDiseaseModels():
         self.rf_pipe = Pipeline(
             [
                 ('scaler', StandardScaler()),
-                #('feature_selector', SelectFromModel(LinearSVC(random_state=42), threshold=-np.inf, max_features=26)),
+                ('feature_selector', SelectFromModel(LinearSVC(random_state=42), threshold=-np.inf, max_features=10)),
                 ('rf', RandomForestClassifier(random_state=42))
             ]
         )
         self.ada_pipe = Pipeline(
             [
                 ('scaler', StandardScaler()),
-                #('feature_selector', SelectFromModel(LinearSVC(random_state=42), threshold=-np.inf, max_features=26)),
+                ('feature_selector', SelectFromModel(LinearSVC(random_state=42), threshold=-np.inf, max_features=10)),
                 ('ada', AdaBoostClassifier())
             ]
         )
         # Parameters of pipelines
+
+        # auto generate a range of base models for feature optimization
+        features_selectors = []
+        for f in range(3, 27):
+            features_selectors.append(SelectFromModel(LinearSVC(random_state=42), threshold=-np.inf, max_features=f))
         self.logreg_param_grid = {
             'logreg__C': np.logspace(-4, 4, 4),
         }
