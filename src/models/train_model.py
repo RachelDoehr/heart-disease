@@ -90,20 +90,7 @@ class HeartDiseaseModels():
                 ('ada', AdaBoostClassifier())
             ]
         )
-        self.ada_pipe_logreg = Pipeline(
-            [
-                ('scaler', StandardScaler()),
-                ('ada', AdaBoostClassifier())
-            ]
-        )
         # Parameters of pipelines
-
-        # auto generate a range of base models for feature optimization
-        base_logreg_estimators = []
-
-        for jj in range(2, 21):
-            base_logreg_estimators.append(LogisticRegression(max_iter=jj, random_state=42))
-        
         self.logreg_param_grid = {
             'logreg__C': np.logspace(-4, 4, 4),
         }
@@ -123,12 +110,6 @@ class HeartDiseaseModels():
             'ada__n_estimators': [int(x) for x in np.linspace(start=200, stop=1000, num=10)],
             'ada__algorithm': ['SAMME', 'SAMME.R']
         }
-        self.ada_logreg_param_grid = {
-            'ada__base_estimator': base_logreg_estimators,
-            'ada__learning_rate': np.logspace(-4, 4, 4), # effectively regularization
-            'ada__n_estimators': [int(x) for x in np.linspace(start=200, stop=1000, num=10)],
-            'ada__algorithm': ['SAMME', 'SAMME.R']
-        }
         self.logger.info('built training and scaling pipelines...')
 
     def train_pipelines(self):
@@ -137,20 +118,7 @@ class HeartDiseaseModels():
 
         self.best_models = []
         
-        for m, p in zip(
-                [
-                    self.logreg_pipe,
-                    self.rf_pipe, 
-                    self.ada_pipe_logreg,
-                    self.ada_pipe
-                ],
-                [
-                    self.logreg_param_grid,
-                    self.rf_param_grid,
-                    self.ada_logreg_param_grid,
-                    self.ada_pipe
-                ]
-            ):
+        for m, p in zip([self.logreg_pipe, self.rf_pipe, self.ada_pipe], [self.logreg_param_grid, self.rf_param_grid, self.ada_pipe]):
 
             search = GridSearchCV(m, p, n_jobs=-1)
             search.fit(self.X_train, self.y_train)
@@ -167,7 +135,7 @@ class HeartDiseaseModels():
         self.yhats_test = []
         self.probas_test = []
 
-        for m, l in zip(self.best_models, ['Logistic Regression', 'Random Forest', 'AdaBoost LogRegs', 'AdaBoost Decision Stumps']):
+        for m, l in zip(self.best_models, ['Logistic Regression', 'Random Forest', 'AdaBoost Decision Trees']):
             print('+++++++++++++++++++++++++++++++++++')
             print('ERRORS: TEST SET')
             print('Model: ', l)
@@ -238,7 +206,7 @@ class HeartDiseaseModels():
 
     def gen_error_graphics(self):
 
-        for y, l in zip(self.yhats_test, ['Logistic_Regression', 'Random_Forest', 'AdaBoost_LogRegs', 'AdaBoost_Decision_Stumps']):
+        for y, l in zip(self.yhats_test, ['Logistic_Regression', 'Random_Forest', 'AdaBoost_Decision_Trees']):
 
             self.plot_confusion_matrix(
                 y_true=self.y_test,
@@ -248,7 +216,7 @@ class HeartDiseaseModels():
                 name=l,
                 title='Confusion Matrix: Test Set'
             )
-        for p, l in zip(self.probas_test, ['Logistic_Regression', 'Random_Forest', 'AdaBoost_LogRegs', 'AdaBoost_Decision_Stumps']):
+        for p, l in zip(self.probas_test, ['Logistic_Regression', 'Random_Forest', 'AdaBoost_Decision_Trees']):
             
             self.plot_roc_curve(name=l, yproba=p[:, 1])
 
@@ -311,11 +279,11 @@ class HeartDiseaseModels():
         '''Runs the necessary methods'''
 
         self.get_data()
-        #self.prep_data_pipelines()
-        #self.train_pipelines()
-        #self.classification_reports()
-        #self.gen_error_graphics()
-        self.analyze_feature_importance(model='i')
+        self.prep_data_pipelines()
+        self.train_pipelines()
+        self.classification_reports()
+        self.gen_error_graphics()
+        #self.analyze_feature_importance(model='i')
 
 def main():
 
