@@ -18,6 +18,7 @@ from sklearn.svm import LinearSVC
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import GridSearchCV
+from sklearn.inspection import permutation_importance
 from sklearn.metrics import mean_squared_error
 from sklearn.pipeline import Pipeline
 from sklearn.linear_model import LogisticRegression
@@ -74,30 +75,35 @@ class HeartDiseaseModels():
         self.logreg_pipe = Pipeline(
             [
                 ('scaler', StandardScaler()),
-                #('feature_selector', SelectFromModel(LinearSVC(random_state=42), threshold=-np.inf, max_features=26)),
                 ('logreg', LogisticRegression(random_state=42, max_iter=200))
             ]
         )
         self.rf_pipe = Pipeline(
             [
                 ('scaler', StandardScaler()),
-                ('feature_selector', SelectFromModel(LinearSVC(random_state=42), threshold=-np.inf, max_features=10)),
                 ('rf', RandomForestClassifier(random_state=42))
             ]
         )
         self.ada_pipe = Pipeline(
             [
                 ('scaler', StandardScaler()),
-                ('feature_selector', SelectFromModel(LinearSVC(random_state=42), threshold=-np.inf, max_features=10)),
+                ('ada', AdaBoostClassifier())
+            ]
+        )
+        self.ada_pipe_logreg = Pipeline(
+            [
+                ('scaler', StandardScaler()),
                 ('ada', AdaBoostClassifier())
             ]
         )
         # Parameters of pipelines
 
         # auto generate a range of base models for feature optimization
-        features_selectors = []
-        for f in range(3, 27):
-            features_selectors.append(SelectFromModel(LinearSVC(random_state=42), threshold=-np.inf, max_features=f))
+        base_logreg_estimators = []
+
+        for jj in range(2, 21):
+            base_logreg_estimators.append(LogisticRegression(max_iter=jj, random_state=42))
+        
         self.logreg_param_grid = {
             'logreg__C': np.logspace(-4, 4, 4),
         }
@@ -117,6 +123,12 @@ class HeartDiseaseModels():
             'ada__n_estimators': [int(x) for x in np.linspace(start=200, stop=1000, num=10)],
             'ada__algorithm': ['SAMME', 'SAMME.R']
         }
+        self.ada_logreg_param_grid = {
+            'ada__base_estimator': base_logreg_estimators,
+            'ada__learning_rate': np.logspace(-4, 4, 4), # effectively regularization
+            'ada__n_estimators': [int(x) for x in np.linspace(start=200, stop=1000, num=10)],
+            'ada__algorithm': ['SAMME', 'SAMME.R']
+        }
         self.logger.info('built training and scaling pipelines...')
 
     def train_pipelines(self):
@@ -125,7 +137,20 @@ class HeartDiseaseModels():
 
         self.best_models = []
         
-        for m, p in zip([self.logreg_pipe, self.rf_pipe, self.ada_pipe], [self.logreg_param_grid, self.rf_param_grid, self.ada_param_grid]):
+        for m, p in zip(
+                [
+                    self.logreg_pipe,
+                    self.rf_pipe, 
+                    self.ada_pipe_logreg,
+                    self.ada_pipe
+                ],
+                [
+                    self.logreg_param_grid,
+                    self.rf_param_grid,
+                    self.ada_logreg_param_grid,
+                    self.ada_pipe
+                ]
+            ):
 
             search = GridSearchCV(m, p, n_jobs=-1)
             search.fit(self.X_train, self.y_train)
@@ -142,7 +167,7 @@ class HeartDiseaseModels():
         self.yhats_test = []
         self.probas_test = []
 
-        for m, l in zip(self.best_models, ['Logistic Regression', 'Random Forest', 'AdaBoost']):
+        for m, l in zip(self.best_models, ['Logistic Regression', 'Random Forest', 'AdaBoost LogRegs', 'AdaBoost Decision Stumps']):
             print('+++++++++++++++++++++++++++++++++++')
             print('ERRORS: TEST SET')
             print('Model: ', l)
@@ -213,7 +238,7 @@ class HeartDiseaseModels():
 
     def gen_error_graphics(self):
 
-        for y, l in zip(self.yhats_test, ['Logistic_Regression', 'Random_Forest', 'AdaBoost']):
+        for y, l in zip(self.yhats_test, ['Logistic_Regression', 'Random_Forest', 'AdaBoost_LogRegs', 'AdaBoost_Decision_Stumps']):
 
             self.plot_confusion_matrix(
                 y_true=self.y_test,
@@ -223,21 +248,74 @@ class HeartDiseaseModels():
                 name=l,
                 title='Confusion Matrix: Test Set'
             )
-        for p, l in zip(self.probas_test, ['Logistic_Regression', 'Random_Forest', 'AdaBoost']):
+        for p, l in zip(self.probas_test, ['Logistic_Regression', 'Random_Forest', 'AdaBoost_LogRegs', 'AdaBoost_Decision_Stumps']):
             
             self.plot_roc_curve(name=l, yproba=p[:, 1])
 
         self.logger.info('plotted confusion matrices and ROC curves in /reports/figures/...')
+    
+    def analyze_feature_importance(self, model):
+
+        '''Given the optimal trained model, use permutations to examine relative feature contribution.
+        Check for high multicollinearity which would make correlated features look less importance even if they are.'''
+
+        correl = self.X_test
+        corr = correl.corr()
+        # generate a mask for the upper triangle
+        mask = np.zeros_like(corr, dtype=np.bool)
+        mask[np.triu_indices_from(mask)] = True
+
+        f, ax = plt.subplots(figsize=(12, 12))
+
+        # generate a custom diverging colormap
+        cmap = sns.cubehelix_palette(8, start=.5, rot=-.75)
+
+        # Draw the heatmap with the mask and correct aspect ratio
+        sns.heatmap(corr, mask=mask, cmap=cmap, center=0, ax=ax,
+                    square=True, linewidths=.2, cbar_kws={"shrink": 0.5})
+        pth = Path(self.graphics_path, 'correlation_matrix').with_suffix('.png')
+        f.savefig(pth)
+        # ----------------------- feature importance on test set
+        result = permutation_importance(model, self.X_test, self.y_test, n_repeats=10,
+                                random_state=42, n_jobs=2)
+        sorted_idx = result.importances_mean.argsort()
+
+        fig, ax = plt.subplots(figsize=(6, 6))
+        bp = ax.boxplot(result.importances[sorted_idx].T,
+                vert=False, labels=self.X_test.columns[sorted_idx], patch_artist=True)
+        
+        ## decorations
+        for box in bp['boxes']:
+            box.set(color='#abfc90', linewidth=2)
+            box.set(facecolor='#43ff56', alpha=0.5)
+
+        for whisker in bp['whiskers']:
+            whisker.set(color='#abfc90', linewidth=2)
+
+        for cap in bp['caps']:
+            cap.set(color='#abfc90', linewidth=2)
+
+        for median in bp['medians']:
+            median.set(color='#F90031', linewidth=2)
+
+        for flier in bp['fliers']:
+            flier.set(marker='o', color='#f92e4a', alpha=0.5)
+        ax.set_title("Permutation Importances (test set)")
+        fig.tight_layout()
+        plt.show()
+
+        self.logger.info('plotted and save feature correlations and importance in /reports/figures/')
 
     def execute_analysis(self):
 
         '''Runs the necessary methods'''
 
         self.get_data()
-        self.prep_data_pipelines()
-        self.train_pipelines()
-        self.classification_reports()
-        self.gen_error_graphics()
+        #self.prep_data_pipelines()
+        #self.train_pipelines()
+        #self.classification_reports()
+        #self.gen_error_graphics()
+        self.analyze_feature_importance(model='i')
 
 def main():
 
