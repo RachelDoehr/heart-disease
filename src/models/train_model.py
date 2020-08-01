@@ -32,6 +32,7 @@ from plot_metric.functions import BinaryClassification
 import numpy as np
 import seaborn as sns
 from matplotlib import pyplot as plt
+from matplotlib import cm
 
 BUCKET = 'heart-disease-1301' # s3 bucket name
 TEST_PERCENT = 0.2 # train / test split
@@ -98,40 +99,21 @@ class HeartDiseaseModels():
             'logreg__C': np.logspace(-4, 4, 4),
         }
         self.rf_param_grid = {
-            'rf__n_estimators': [int(x) for x in np.linspace(start=2, stop=5, num=1)],
-            'rf__max_depth': [int(x) for x in np.linspace(2, 4, num=1)],
-            #'rf__bootstrap': [True, False]
+            'rf__n_estimators': [int(x) for x in np.linspace(start=200, stop=1000, num=10)],
+            'rf__max_depth': [int(x) for x in np.linspace(10, 110, num=11)],
+            'rf__bootstrap': [True, False]
         }
         # auto generate a range of base decision stumps
         base_estimators = []
-        for jj in range(1, 3, 1):
+        for jj in range(1, 111, 11):
             base_estimators.append(DecisionTreeClassifier(max_depth=jj, min_samples_leaf=1, random_state=42))
         
         self.ada_param_grid = {
             'ada__base_estimator': base_estimators,
-            #'ada__learning_rate': np.logspace(-4, 4, 4), # effectively regularization
-            'ada__n_estimators': [int(x) for x in np.linspace(start=2, stop=5, num=1)],
-            #'ada__algorithm': ['SAMME', 'SAMME.R']
+            'ada__learning_rate': np.logspace(-4, 4, 4), # effectively regularization
+            'ada__n_estimators': [int(x) for x in np.linspace(start=200, stop=1000, num=10)],
+            'ada__algorithm': ['SAMME', 'SAMME.R']
         }
-        # self.logreg_param_grid = {
-        #     'logreg__C': np.logspace(-4, 4, 4),
-        # }
-        # self.rf_param_grid = {
-        #     'rf__n_estimators': [int(x) for x in np.linspace(start=200, stop=1000, num=10)],
-        #     'rf__max_depth': [int(x) for x in np.linspace(10, 110, num=11)],
-        #     'rf__bootstrap': [True, False]
-        # }
-        # # auto generate a range of base decision stumps
-        # base_estimators = []
-        # for jj in range(1, 111, 11):
-        #     base_estimators.append(DecisionTreeClassifier(max_depth=jj, min_samples_leaf=1, random_state=42))
-        
-        # self.ada_param_grid = {
-        #     'ada__base_estimator': base_estimators,
-        #     'ada__learning_rate': np.logspace(-4, 4, 4), # effectively regularization
-        #     'ada__n_estimators': [int(x) for x in np.linspace(start=200, stop=1000, num=10)],
-        #     'ada__algorithm': ['SAMME', 'SAMME.R']
-        # }
         self.logger.info('built training and scaling pipelines...')
 
     def train_pipelines(self):
@@ -227,6 +209,7 @@ class HeartDiseaseModels():
         fig.tight_layout()
         pth = Path(self.graphics_path, 'conf_matrix_'+name).with_suffix('.png')
         plt.savefig(pth)
+        plt.close()
     
     def plot_roc_curve(self, yproba, name):
 
@@ -240,6 +223,7 @@ class HeartDiseaseModels():
         bc.plot_roc_curve()
         pth = Path(self.graphics_path, 'roc_curve_'+name).with_suffix('.png')
         plt.savefig(pth)
+        plt.close()
 
     def gen_error_graphics(self):
 
@@ -319,7 +303,7 @@ class HeartDiseaseModels():
             return s_df.dropna(how='any')
 
         s_0_trestbps, s_1_trestbps = [_gen_var_range('trestbps', s) for s in [0, 1]] # heart rate
-        s_0_age, s_1_age = [_gen_var_range('age', s) for s in [0, 1]] # age
+        s_0_age, s_1_age = [_gen_var_range('chol', s) for s in [0, 1]] # cholesterol
         
         s_0_age['key'] = 0
         s_0_trestbps['key'] = 0
@@ -333,7 +317,7 @@ class HeartDiseaseModels():
 
         self.synthetic_male, self.synthetic_female = full_range_0, full_range_1
 
-    def map_decision_space(self, model):
+    def map_decision_space(self, name, mdl_id):
 
         '''Visualize the decision boundary for the models with respect to a few key variables of interest,
         blood pressure, age, and sex. Generates synthetic data to completely map the full range of possible
@@ -343,15 +327,35 @@ class HeartDiseaseModels():
         pushed through the trained models to generate predictions. Predicted probabilities of heart disease are plotted.'''
 
         self.create_synthetic_people()
+        sns.set(style='white')
     
-        X_0 = self.synthetic_male[self.X_train.columns]
-        X_0['p_disease'] = self.best_models[0].predict_proba(X_0)[:, 1]
-        print(X_0)
-        
-        
-        
+        X_0 = self.synthetic_female[self.X_train.columns]
+        X_0['p_disease'] = self.best_models[mdl_id].predict_proba(X_0)[:, 1]
+        df = X_0[['p_disease', 'chol', 'trestbps']]
+        yhat_0 = self.best_models[mdl_id].predict_proba(self.X_train[self.X_train.sex == 1])[:, 1]
 
-        self.logger.info('plotted and save feature correlations and importance in /reports/figures/')
+        # plot probability surface
+        fig = plt.figure(dpi=100)
+        ax1 = fig.gca(projection='3d')
+
+        ax1.plot_trisurf(df['chol'], df['trestbps'], df['p_disease'], cmap=plt.cm.coolwarm, linewidth=0.001, alpha=0.85)
+        ax1.scatter(self.X_train[self.X_train.sex == 1]['chol'], self.X_train[self.X_train.sex == 1]['trestbps'], yhat_0,
+        c='black', s=30)
+
+        # Decorations
+        ax1.set_xlabel('Cholesterol', fontsize=9)
+        ax1.tick_params(axis='x', rotation=0, labelsize=8)
+        ax1.set_ylabel('Resting Heart Rate', color='black', fontsize=9)
+        ax1.tick_params(axis='y', rotation=0, labelsize=8)
+        ax1.set_zlabel('Probability of Heart Disease', color='black', fontsize=9)
+        ax1.tick_params(axis='z', rotation=0, labelsize=8)
+
+        plt.title('Learned Decision Space: '+name, fontsize=12, fontweight='bold')
+        pth = Path(self.graphics_path, 'probability_plot_'+name).with_suffix('.png')
+        plt.savefig(pth)
+        plt.close()
+        
+        self.logger.info('plotted and save probability plot for one model in /reports/figures...')
 
     def execute_analysis(self):
 
@@ -363,7 +367,9 @@ class HeartDiseaseModels():
         self.compile_voting_classifier()
         self.classification_reports()
         self.gen_error_graphics()
-        self.map_decision_space(model='i')
+        self.map_decision_space(name='logreg', mdl_id=0)
+        self.map_decision_space(name='random_forest', mdl_id=1)
+        self.map_decision_space(name='adaboost_trees', mdl_id=2)
 
 def main():
 
