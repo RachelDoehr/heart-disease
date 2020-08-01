@@ -26,6 +26,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import AdaBoostClassifier
 from sklearn.tree import DecisionTreeClassifier
 import pandas as pd
+from matplotlib.ticker import LinearLocator, FormatStrFormatter
+from mpl_toolkits.mplot3d import Axes3D
 from plot_metric.functions import BinaryClassification
 import numpy as np
 import seaborn as sns
@@ -96,21 +98,40 @@ class HeartDiseaseModels():
             'logreg__C': np.logspace(-4, 4, 4),
         }
         self.rf_param_grid = {
-            'rf__n_estimators': [int(x) for x in np.linspace(start=200, stop=1000, num=10)],
-            'rf__max_depth': [int(x) for x in np.linspace(10, 110, num=11)],
-            'rf__bootstrap': [True, False]
+            'rf__n_estimators': [int(x) for x in np.linspace(start=2, stop=5, num=1)],
+            'rf__max_depth': [int(x) for x in np.linspace(2, 4, num=1)],
+            #'rf__bootstrap': [True, False]
         }
         # auto generate a range of base decision stumps
         base_estimators = []
-        for jj in range(1, 111, 11):
+        for jj in range(1, 3, 1):
             base_estimators.append(DecisionTreeClassifier(max_depth=jj, min_samples_leaf=1, random_state=42))
         
         self.ada_param_grid = {
             'ada__base_estimator': base_estimators,
-            'ada__learning_rate': np.logspace(-4, 4, 4), # effectively regularization
-            'ada__n_estimators': [int(x) for x in np.linspace(start=200, stop=1000, num=10)],
-            'ada__algorithm': ['SAMME', 'SAMME.R']
+            #'ada__learning_rate': np.logspace(-4, 4, 4), # effectively regularization
+            'ada__n_estimators': [int(x) for x in np.linspace(start=2, stop=5, num=1)],
+            #'ada__algorithm': ['SAMME', 'SAMME.R']
         }
+        # self.logreg_param_grid = {
+        #     'logreg__C': np.logspace(-4, 4, 4),
+        # }
+        # self.rf_param_grid = {
+        #     'rf__n_estimators': [int(x) for x in np.linspace(start=200, stop=1000, num=10)],
+        #     'rf__max_depth': [int(x) for x in np.linspace(10, 110, num=11)],
+        #     'rf__bootstrap': [True, False]
+        # }
+        # # auto generate a range of base decision stumps
+        # base_estimators = []
+        # for jj in range(1, 111, 11):
+        #     base_estimators.append(DecisionTreeClassifier(max_depth=jj, min_samples_leaf=1, random_state=42))
+        
+        # self.ada_param_grid = {
+        #     'ada__base_estimator': base_estimators,
+        #     'ada__learning_rate': np.logspace(-4, 4, 4), # effectively regularization
+        #     'ada__n_estimators': [int(x) for x in np.linspace(start=200, stop=1000, num=10)],
+        #     'ada__algorithm': ['SAMME', 'SAMME.R']
+        # }
         self.logger.info('built training and scaling pipelines...')
 
     def train_pipelines(self):
@@ -238,6 +259,80 @@ class HeartDiseaseModels():
 
         self.logger.info('plotted confusion matrices and ROC curves in /reports/figures/...')
 
+    def create_avg_people(self):
+
+        '''Prep work to do analysis on the learned decision space for age/cholesterol. Creates
+        a 'typical' person in the dataset for each gender. Handles categorical variables as modes.'''
+
+        categoricals = self.X_train[[c for c in self.X_train.columns if '__' in c or c in ['sex', 'exang']]]
+        continous = self.X_train[['trestbps', 'chol', 'thalach', 'oldpeak', 'age', 'sex']]
+
+        continous_avg_sex = continous.groupby('sex').mean().reset_index()
+        categoricals_mode_sex = categoricals.groupby('sex').sum().reset_index()
+
+        # create the synthetic categorical variables by sex
+        mode_out_df = categoricals_mode_sex.copy()
+        for col in mode_out_df.columns:
+            if col != 'sex':
+                mode_out_df[col].values[:] = 0
+
+        def _find_mode(variable, in_df, out_df):
+
+            '''Helper func for finding mode of a variable and updating'''
+            mode_col = in_df[[c for c in in_df.columns if variable+'__' in c]].idxmax(axis=1)
+            out_df[mode_col.values[0]].values[:] = 1
+
+        def _find_sex_modes(s):
+            
+            '''Helper func for executing mode analysis'''
+            s_df = categoricals_mode_sex[categoricals_mode_sex.sex == s]
+            s_out_df = mode_out_df[mode_out_df.sex == s]
+            # ---- iterate through the possible categorical variables
+            vars = ['cp', 'thal', 'restecg', 'slope', 'ca']
+            [_find_mode(v, s_df, s_out_df) for v in vars]
+            
+            a = continous_avg_sex.merge(s_out_df, how='left', left_on='sex', right_on='sex')
+            return a
+        
+        s_0, s_1 = [_find_sex_modes(ss) for ss in [0, 1]]
+        
+        self.avg_people = pd.concat([s_0, s_1], ignore_index=True).dropna(how='any')
+
+    def create_synthetic_people(self):
+
+        '''Helper function to generate synthetic data that uses the avg/mode for all other variables
+        than resting heart rate and age.'''
+
+        self.create_avg_people()
+
+        def _gen_var_range(v, gender):
+    
+            '''Helper func to generate synthetic data of possible range of var in data'''
+
+            s_df = self.avg_people[self.avg_people.sex == gender]
+            min_trestbps = int(np.round(self.X_train[self.X_train.sex == gender][v].min(), 0))
+            max_trestbps = int(np.round(self.X_train[self.X_train.sex == gender][v].max(), 0))
+
+            s_df = s_df.append([s_df]*(max_trestbps - min_trestbps), ignore_index=True)
+            s_df[v] = pd.Series(np.arange(min_trestbps, max_trestbps, 1))
+            
+            return s_df.dropna(how='any')
+
+        s_0_trestbps, s_1_trestbps = [_gen_var_range('trestbps', s) for s in [0, 1]] # heart rate
+        s_0_age, s_1_age = [_gen_var_range('age', s) for s in [0, 1]] # age
+        
+        s_0_age['key'] = 0
+        s_0_trestbps['key'] = 0
+        full_range_0 = s_0_age.merge(s_0_trestbps[['key', 'trestbps']], on='key', how='outer')
+        full_range_0['trestbps'] = full_range_0['trestbps_y']
+
+        s_1_age['key'] = 0
+        s_1_trestbps['key'] = 0
+        full_range_1 = s_1_age.merge(s_1_trestbps[['key', 'trestbps']], on='key', how='outer')
+        full_range_1['trestbps'] = full_range_1['trestbps_y']
+
+        self.synthetic_male, self.synthetic_female = full_range_0, full_range_1
+
     def map_decision_space(self, model):
 
         '''Visualize the decision boundary for the models with respect to a few key variables of interest,
@@ -247,13 +342,14 @@ class HeartDiseaseModels():
         Synthetic data holds other variables at the mean or mode (if categorical) levels. Then the synthetic data is
         pushed through the trained models to generate predictions. Predicted probabilities of heart disease are plotted.'''
 
-        categoricals = self.X_train[[c for c in self.X_train.columns if '__' in c or c in ['sex', 'exang']]]
-        continous = self.X_train[['trestbps', 'chol', 'thalach', 'oldpeak', 'age']]
-
-        continous_avg_sex = continous.groupby('sex').mean().reset_index()
-        categoricals_mode_sex = categoricals.groupby('sex').sum().reset_index()
-
-
+        self.create_synthetic_people()
+    
+        X_0 = self.synthetic_male[self.X_train.columns]
+        X_0['p_disease'] = self.best_models[0].predict_proba(X_0)[:, 1]
+        print(X_0)
+        
+        
+        
 
         self.logger.info('plotted and save feature correlations and importance in /reports/figures/')
 
@@ -267,7 +363,7 @@ class HeartDiseaseModels():
         self.compile_voting_classifier()
         self.classification_reports()
         self.gen_error_graphics()
-        #self.analyze_feature_importance(model=self.best_models[0])
+        self.map_decision_space(model='i')
 
 def main():
 
