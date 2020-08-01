@@ -17,9 +17,10 @@
 
 **Motivation & Project Summary**
 
-This project started out as a comparison of statsmodels' univariate time series methods using a walk-forward validation strategy. However, while out-of-sample ('OOS') prediction is available for Autoregressions and Exponential Smoothers, <a href="https://github.com/statsmodels/statsmodels/blob/ebe5e76c6c8055dddb247f7eff174c959acc61d2/statsmodels/tsa/regime_switching/markov_switching.py#L702-L703" target="_blank">it is not yet implemented for MS-AR</a>
+This project is a demonstration of using various binary classification algorithms on the UCI heart disease dataset to predict whether or not a patient is likely to have heart disease. The broad approach taken was to use k-fold cross validation to tune the hyperparameters and select the optimal model for each algorithm examine. Then, the out of sample performance was tested on a separate hold out batch, and accuracy reports for misclassifications generated. Finally, the relative feature importance of the optimal models was analyzed using a permutation-based importance estimator. This allows insight into the learned model's key drivers of cardiac disease risk.
 
-Here I leverage the statsmodels MS-AR framework to build an extension which generates OOS forecasts for MS-ARs. Currently the extension is limited to the context in which I needed it (2 regimes, no exogenous vars), but it could be easily extended to complement the full range of **kwargs MS-AR offers. 
+The models considered are either semiparametric (Logistic Regression) or entirely non-parametric in nature (Random Forest and AdaBoost + Decision Trees). The sample is conveniently evenly balanced across both classes from the start. , <a href="https://github.com/statsmodels/statsmodels/blob/ebe5e76c6c8055dddb247f7eff174c959acc61d2/statsmodels/tsa/regime_switching/markov_switching.py#L702-L703" target="_blank">it is not yet implemented for MS-AR</a>
+
 
 The extension is demonstrated on Federal Reserve monthly economic data, showing forecast performance for U.S. unemployment claims in "normal" times (~2000 - 2007) and a crisis/recession (~2008 - 2010). **Consistent with the literature, the MS-AR offers comparable out of sample forecasting for normal times and outperforms in the non-dominant regime.**
 
@@ -28,6 +29,7 @@ The extension is demonstrated on Federal Reserve monthly economic data, showing 
 - INSTALLATION & SETUP
 
 *RESULTS*
+- DATA VISUALIZATION
 - ERROR METRICS
 - FEATURE IMPORTANCE
 

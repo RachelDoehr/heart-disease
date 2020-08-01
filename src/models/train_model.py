@@ -18,6 +18,7 @@ from sklearn.svm import LinearSVC
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import GridSearchCV
+from sklearn.ensemble import VotingClassifier
 from sklearn.inspection import permutation_importance
 from sklearn.metrics import mean_squared_error
 from sklearn.pipeline import Pipeline
@@ -118,7 +119,7 @@ class HeartDiseaseModels():
 
         self.best_models = []
         
-        for m, p in zip([self.logreg_pipe, self.rf_pipe, self.ada_pipe], [self.logreg_param_grid, self.rf_param_grid, self.ada_pipe]):
+        for m, p in zip([self.logreg_pipe, self.rf_pipe, self.ada_pipe], [self.logreg_param_grid, self.rf_param_grid, self.ada_param_grid]):
 
             search = GridSearchCV(m, p, n_jobs=-1)
             search.fit(self.X_train, self.y_train)
@@ -127,7 +128,22 @@ class HeartDiseaseModels():
 
             self.best_models.append(search.best_estimator_)
             self.logger.info('trained one grid search for one pipeline...')
+
+    def compile_voting_classifier(self):
     
+        '''Given the trained models, put together a soft voting classifier to balance individual model
+        weaknesses but overall relatively comparable performance.'''
+
+        self.eclf = VotingClassifier(
+            estimators=[
+                ('logreg', self.best_models[0]),
+                ('rf', self.best_models[1]),
+                ('bdt', self.best_models[2])
+            ], voting='soft', weights=[2, 1, 1])
+
+        self.eclf = self.eclf.fit(self.X_train, self.y_train)
+        self.best_models.append(self.eclf)
+
     def classification_reports(self):
 
         '''Post training, creates error reports and confusion matrices.'''
@@ -135,7 +151,7 @@ class HeartDiseaseModels():
         self.yhats_test = []
         self.probas_test = []
 
-        for m, l in zip(self.best_models, ['Logistic Regression', 'Random Forest', 'AdaBoost Decision Trees']):
+        for m, l in zip(self.best_models, ['Logistic Regression', 'Random Forest', 'AdaBoost Decision Trees', 'Meta Voting Classifier']):
             print('+++++++++++++++++++++++++++++++++++')
             print('ERRORS: TEST SET')
             print('Model: ', l)
@@ -206,7 +222,7 @@ class HeartDiseaseModels():
 
     def gen_error_graphics(self):
 
-        for y, l in zip(self.yhats_test, ['Logistic_Regression', 'Random_Forest', 'AdaBoost_Decision_Trees']):
+        for y, l in zip(self.yhats_test, ['Logistic_Regression', 'Random_Forest', 'AdaBoost_Decision_Trees', 'Meta Voting Classifier']):
 
             self.plot_confusion_matrix(
                 y_true=self.y_test,
@@ -216,61 +232,28 @@ class HeartDiseaseModels():
                 name=l,
                 title='Confusion Matrix: Test Set'
             )
-        for p, l in zip(self.probas_test, ['Logistic_Regression', 'Random_Forest', 'AdaBoost_Decision_Trees']):
+        for p, l in zip(self.probas_test, ['Logistic_Regression', 'Random_Forest', 'AdaBoost_Decision_Trees', 'Meta Voting Classifier']):
             
             self.plot_roc_curve(name=l, yproba=p[:, 1])
 
         self.logger.info('plotted confusion matrices and ROC curves in /reports/figures/...')
-    
-    def analyze_feature_importance(self, model):
 
-        '''Given the optimal trained model, use permutations to examine relative feature contribution.
-        Check for high multicollinearity which would make correlated features look less importance even if they are.'''
+    def map_decision_space(self, model):
 
-        correl = self.X_test
-        corr = correl.corr()
-        # generate a mask for the upper triangle
-        mask = np.zeros_like(corr, dtype=np.bool)
-        mask[np.triu_indices_from(mask)] = True
-
-        f, ax = plt.subplots(figsize=(12, 12))
-
-        # generate a custom diverging colormap
-        cmap = sns.cubehelix_palette(8, start=.5, rot=-.75)
-
-        # Draw the heatmap with the mask and correct aspect ratio
-        sns.heatmap(corr, mask=mask, cmap=cmap, center=0, ax=ax,
-                    square=True, linewidths=.2, cbar_kws={"shrink": 0.5})
-        pth = Path(self.graphics_path, 'correlation_matrix').with_suffix('.png')
-        f.savefig(pth)
-        # ----------------------- feature importance on test set
-        result = permutation_importance(model, self.X_test, self.y_test, n_repeats=10,
-                                random_state=42, n_jobs=2)
-        sorted_idx = result.importances_mean.argsort()
-
-        fig, ax = plt.subplots(figsize=(6, 6))
-        bp = ax.boxplot(result.importances[sorted_idx].T,
-                vert=False, labels=self.X_test.columns[sorted_idx], patch_artist=True)
+        '''Visualize the decision boundary for the models with respect to a few key variables of interest,
+        blood pressure, age, and sex. Generates synthetic data to completely map the full range of possible
+        values blood pressure and age can take on (within the range of the dataset which is a limitation on life).
         
-        ## decorations
-        for box in bp['boxes']:
-            box.set(color='#abfc90', linewidth=2)
-            box.set(facecolor='#43ff56', alpha=0.5)
+        Synthetic data holds other variables at the mean or mode (if categorical) levels. Then the synthetic data is
+        pushed through the trained models to generate predictions. Predicted probabilities of heart disease are plotted.'''
 
-        for whisker in bp['whiskers']:
-            whisker.set(color='#abfc90', linewidth=2)
+        categoricals = self.X_train[[c for c in self.X_train.columns if '__' in c or c in ['sex', 'exang']]]
+        continous = self.X_train[['trestbps', 'chol', 'thalach', 'oldpeak', 'age']]
 
-        for cap in bp['caps']:
-            cap.set(color='#abfc90', linewidth=2)
+        continous_avg_sex = continous.groupby('sex').mean().reset_index()
+        categoricals_mode_sex = categoricals.groupby('sex').sum().reset_index()
 
-        for median in bp['medians']:
-            median.set(color='#F90031', linewidth=2)
 
-        for flier in bp['fliers']:
-            flier.set(marker='o', color='#f92e4a', alpha=0.5)
-        ax.set_title("Permutation Importances (test set)")
-        fig.tight_layout()
-        plt.show()
 
         self.logger.info('plotted and save feature correlations and importance in /reports/figures/')
 
@@ -281,9 +264,10 @@ class HeartDiseaseModels():
         self.get_data()
         self.prep_data_pipelines()
         self.train_pipelines()
+        self.compile_voting_classifier()
         self.classification_reports()
         self.gen_error_graphics()
-        #self.analyze_feature_importance(model='i')
+        #self.analyze_feature_importance(model=self.best_models[0])
 
 def main():
 
