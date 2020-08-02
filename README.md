@@ -13,16 +13,13 @@
 
 > -> Post-hoc analysis is done on visualizing the various algorithm's learned decision spaces with respect to how cholesterol and resting heart rate affect the predicted probability of heart disease
 
-![Alt Text](https://github.com/RachelDoehr/forecasting/blob/master/reports/figures/markov_ar_specification.PNG?raw=true)
+![Alt Text](https://github.com/RachelDoehr/heart-disease/blob/master/reports/figures/logistic_equation.PNG?raw=true)
 
 **Motivation & Project Summary**
 
-This project is a demonstration of using various binary classification algorithms on the UCI heart disease dataset to predict whether or not a patient is likely to have heart disease. The broad approach taken was to use k-fold cross validation to tune the hyperparameters and select the optimal model for each algorithm examine. Then, the out of sample performance was tested on a separate hold out batch, and accuracy reports for misclassifications generated. Finally, the relative feature importance of the optimal models was analyzed using a permutation-based importance estimator. This allows insight into the learned model's key drivers of cardiac disease risk.
+This project is a demonstration of using various binary classification algorithms on the UCI heart disease dataset to predict whether or not a patient is likely to have heart disease. The broad approach taken was to use k-fold cross validation to tune the hyperparameters and select the optimal model for each algorithm examine. Then, the out of sample performance was tested on a separate hold out batch, and accuracy reports for misclassifications generated. Finally, two well-known variables, cholesterol and resting heart rate, are examined by visualizing each model's learned decision space with respect to possible values of those predictors.
 
-The models considered are either semiparametric (Logistic Regression) or entirely non-parametric in nature (Random Forest and AdaBoost + Decision Trees). The sample is conveniently evenly balanced across both classes from the start. , <a href="https://github.com/statsmodels/statsmodels/blob/ebe5e76c6c8055dddb247f7eff174c959acc61d2/statsmodels/tsa/regime_switching/markov_switching.py#L702-L703" target="_blank">it is not yet implemented for MS-AR</a>
-
-
-The extension is demonstrated on Federal Reserve monthly economic data, showing forecast performance for U.S. unemployment claims in "normal" times (~2000 - 2007) and a crisis/recession (~2008 - 2010). **Consistent with the literature, the MS-AR offers comparable out of sample forecasting for normal times and outperforms in the non-dominant regime.**
+The models considered are either semiparametric (Logistic Regression) or entirely non-parametric in nature (Random Forest, AdaBoost + Decision Trees, Voting Classifier). The sample is conveniently evenly balanced across both classes from the start.**The outperformance of the logistic regression relative to random forests and boosted trees implies that 1) the problem is linearly separable in nature, and 2) there are more useful variables in the dataset than noise variables (natural, given the curated nature of this data).**
 
 > ***ReadMe Table of Contents***
 
@@ -65,43 +62,48 @@ $ nohup python /src/models/train_model.py > /logs/models_log.txt &
 
 ## Results
 
-**Preliminary Data Transforms**
+**Preliminary Data Visualization**
 
-*The OOS MS-AR t+1 forecasts for U.S. unemployment claims perform comparably with an AR and exponential smoothing in normal periods, and outperforms in a recession.*
+*The dataset consists of 5 continous variables and the remaining 8 are categorical or binary, which are handled appropriately with dummy variables. The target, 0 or 1, represents whether or not a patient developed heart disease.*
 
-We begin by transforming the data as suggested by the authors of the dataset to make it stationary https://research.stlouisfed.org/econ/mccracken/fred-databases/. The full dataset contains ~140 different series with corresponding strategies for transformation (differencing, logs, logs+differences, etc.). The data can be rougly categorized into different economic factors. For example, the housing variables contain many housing series:
+We begin by plotting the raw distributions of the continous variables with histograms:
 
-![Alt Text](https://github.com/RachelDoehr/forecasting/blob/master/reports/figures/time_series_transformed_housing.png?raw=true)
+![Alt Text](https://github.com/RachelDoehr/heart-disease/blob/master/reports/figures/continous_variables_dist.png?raw=true)
 
-The below graph isolates the chosen variable of interest, unemployment claims. The series is post-making stationary. In the walk-forward validation, the initial training sample is 1970 through late 1990's, while 1998-2007 is considered "normal" economic times, and late 2007-2010 is considered "shock/recession."
+Four of the five appear relatively normal distributions, albeit with slight skews. ST depression, however, is not. The same variables' distributions bifurcated by whether or not the patient had heart disease (using a kernel density estimator) are:
 
-![Alt Text](https://github.com/RachelDoehr/forecasting/blob/master/reports/figures/y_var_time_series.png?raw=true)
+![Alt Text](https://github.com/RachelDoehr/heart-disease/blob/master/reports/figures/continous_variables_by_target.png?raw=true)
 
-A visual examination of the lag structure using an ACF plot:
-![Alt Text](https://github.com/RachelDoehr/forecasting/blob/master/reports/figures/acf_plot.png?raw=true)
+Some of those variables do appear to significantly vary by target. Additionally, the remaining categorical variables distributions include:
+![Alt Text](https://github.com/RachelDoehr/heart-disease/blob/master/reports/figures/categorical_variables_dist.png?raw=true)
  
+Additional visualizations are available in /reports/figures.
 
-### **Cross-Model Comparison in Various Regimes / Time Periods**
+**Error Metrics**
 
-- Using the optimal hyperparameters (lags) selected above, the below graph shows the MSE of the OOS forecasts
-- The MS-AR extension performs comparably with the other univariate statsmodels OOS methods
-- It outperforms in the non-dominant regime, consistent with literature
+Grid search k-fold cross-validation is used across a variety of hyperparameters to select the optimal fit for each of the models examined.
 
-![Alt Text](https://github.com/RachelDoehr/forecasting/blob/master/reports/figures/error_summary.png?raw=true)
+| Model                               	| OOS Accuracy 	|
+|-------------------------------------	|--------------	|
+| Logistic Regression                 	| 88.5%        	|
+| Random Forest                       	| 86.9%        	|
+| AdaBoost Decision Trees             	| 83.6%        	|
+| Voting Classifier of Models (1)-(3) 	| 88.5%        	|
 
-The t+1 forecasts plotted with the actuals show the improved ability to model the more extreme values in '08:
-![Alt Text](https://github.com/RachelDoehr/forecasting/blob/master/reports/figures/yhat_y_Classical.png?raw=true)
+In addition to the simple accuracy above, the confusion matrices for Logistic Regression and Random Forests' performance on the test set are (others available in /reports/figures):
 
+*Logistic Regression*
 
-**Detail on Lag Selection/Parameter Tuning**
+![Alt Text](https://github.com/RachelDoehr/heart-disease/blob/master/reports/figures/conf_matrix_Logistic_Regression.png?raw=true)
 
-The baseline models used are an autoregression and exponential smoothing. The mean squared error for the t+1 forecasts using walk-forward validation across various lag orders are:
-![Alt Text](https://github.com/RachelDoehr/forecasting/blob/master/reports/figures/AR_errors.png?raw=true)
+*Random Forest*
+
+![Alt Text](https://github.com/RachelDoehr/heart-disease/blob/master/reports/figures/conf_matrix_Random_Forest.png?raw=true)
 
 Given the above, a 3rd order lag for the AR is used. Holt's Exponential Smoothing baseline model, on the other hand, uses a weighted lag combination. No hyperparameters are needed to be optimized in the statsmodels implementation.
 
 The MS-AR's mse for the same period (using the custom extension to allow for walk-forward validation) is:
-![Alt Text](https://github.com/RachelDoehr/forecasting/blob/master/reports/figures/MKV_errors.png?raw=true)
+![Alt Text](https://github.com/RachelDoehr/heart-disease/blob/master/reports/figures/roc_curve_Logistic_Regression.png?raw=true)
 
 A 3rd order Markov model is used as well.
 
