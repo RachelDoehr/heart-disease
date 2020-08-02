@@ -5,7 +5,7 @@
 
  *A demonstration of various classification algorithms on UCI ML dataset*
 
-**COMPARISON OF LOGISTIC REGRESSION, RANDOM FOREST, BOOSTED DECISION TREES, AND A VOTING CLASSIFIER). HYPERPARAMETER TUNING + FEATURE IMPORTANCE ANALYSIS**
+**COMPARISON OF LOGISTIC REGRESSION, RANDOM FOREST, BOOSTED DECISION TREES, AND A VOTING CLASSIFIER. HYPERPARAMETER TUNING + FEATURE IMPORTANCE ANALYSIS**
 
 > -> Uses the popular UCI heart disease patient dataset available <a href="https://archive.ics.uci.edu/ml/datasets/heart+Disease" target="_blank">here</a>
 
@@ -137,6 +137,5 @@ Finally, the boosted decision trees appear somewhat similar to the results from 
 ![Alt Text](https://github.com/RachelDoehr/heart-disease/blob/master/reports/figures/probability_plot_adaboost_trees.png?raw=true)
 
 ---
-
 
 <p><small>Project based on the <a target="_blank" href="https://drivendata.github.io/cookiecutter-data-science/">cookiecutter data science project template</a>. #cookiecutterdatascience</small></p> 
