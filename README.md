@@ -124,7 +124,7 @@ Finally, these ~4,000 synthetic data points are pushed through each trained mode
 
 ![Alt Text](https://github.com/RachelDoehr/heart-disease/blob/master/reports/figures/probability_plot_logreg.png?raw=true)
 
-The graph illustrates that 
+The graph illustrates that  
 
 
 ---
