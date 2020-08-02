@@ -1,17 +1,17 @@
 
-![Alt Text](https://github.com/RachelDoehr/forecasting/blob/master/reports/figures/example_markov_chain.gif?raw=true)
+![Alt Text](https://github.com/RachelDoehr/heart-disease/blob/master/reports/figures/example_logistic_reg.gif?raw=true)
 
 # Prediction of Cardiac Diagnosis (Heart Disease) Using Patient Data
 
  *A demonstration of various classification algorithms on UCI ML dataset*
 
-**COMPARISON OF LOGISTIC REGRESSION, RANDOM FOREST, AND BOOSTED WEAK LEARNERS (DECISION STUMPS & LOGISTIC MODELS). HYPERPARAMETER TUNING + FEATURE IMPORTANCE ANALYSIS**
+**COMPARISON OF LOGISTIC REGRESSION, RANDOM FOREST, BOOSTED DECISION TREES, AND A VOTING CLASSIFIER). HYPERPARAMETER TUNING + FEATURE IMPORTANCE ANALYSIS**
 
-> -> Builds on the Markov AR available in the latest statsmodels package available <a href="https://www.statsmodels.org/stable/generated/statsmodels.tsa.regime_switching.markov_autoregression" target="_blank">here</a>
+> -> Uses the popular UCI heart disease patient dataset available <a href="https://archive.ics.uci.edu/ml/datasets/heart+Disease" target="_blank">here</a>
 
-> -> Model comparison to basic Autoregression and Holt's Exponential Smoothing
+> -> Models include logistic regression, random forest, boosted decision trees, and a meta voting classifier of all 3; logistic regression has the highest accuracy by a small margin
 
-> -> Mathematical approach continues the strategy used in statsmodels, e.g. Kim, Chang-Jin, and Charles R. Nelson. “State-Space Models with Regime Switching: Classical and Gibbs-Sampling Approaches with Applications”. MIT Press Books. The MIT Press.
+> -> Post-hoc analysis is done on visualizing the various algorithm's learned decision spaces with respect to how cholesterol and resting heart rate affect the predicted probability of heart disease
 
 ![Alt Text](https://github.com/RachelDoehr/forecasting/blob/master/reports/figures/markov_ar_specification.PNG?raw=true)
 
