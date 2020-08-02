@@ -302,18 +302,18 @@ class HeartDiseaseModels():
             
             return s_df.dropna(how='any')
 
-        s_0_trestbps, s_1_trestbps = [_gen_var_range('trestbps', s) for s in [0, 1]] # heart rate
+        s_0_trestbps, s_1_trestbps = [_gen_var_range('thalach', s) for s in [0, 1]] # heart rate
         s_0_age, s_1_age = [_gen_var_range('chol', s) for s in [0, 1]] # cholesterol
         
         s_0_age['key'] = 0
         s_0_trestbps['key'] = 0
-        full_range_0 = s_0_age.merge(s_0_trestbps[['key', 'trestbps']], on='key', how='outer')
-        full_range_0['trestbps'] = full_range_0['trestbps_y']
+        full_range_0 = s_0_age.merge(s_0_trestbps[['key', 'thalach']], on='key', how='outer')
+        full_range_0['thalach'] = full_range_0['thalach_y']
 
         s_1_age['key'] = 0
         s_1_trestbps['key'] = 0
-        full_range_1 = s_1_age.merge(s_1_trestbps[['key', 'trestbps']], on='key', how='outer')
-        full_range_1['trestbps'] = full_range_1['trestbps_y']
+        full_range_1 = s_1_age.merge(s_1_trestbps[['key', 'thalach']], on='key', how='outer')
+        full_range_1['thalach'] = full_range_1['thalach_y']
 
         self.synthetic_male, self.synthetic_female = full_range_0, full_range_1
 
@@ -331,21 +331,21 @@ class HeartDiseaseModels():
     
         X_0 = self.synthetic_female[self.X_train.columns]
         X_0['p_disease'] = self.best_models[mdl_id].predict_proba(X_0)[:, 1]
-        df = X_0[['p_disease', 'chol', 'trestbps']]
+        df = X_0[['p_disease', 'chol', 'thalach']]
         yhat_0 = self.best_models[mdl_id].predict_proba(self.X_train[self.X_train.sex == 1])[:, 1]
 
         # plot probability surface
         fig = plt.figure(dpi=100)
         ax1 = fig.gca(projection='3d')
 
-        ax1.plot_trisurf(df['chol'], df['trestbps'], df['p_disease'], cmap=plt.cm.coolwarm, linewidth=0.001, alpha=0.85)
-        ax1.scatter(self.X_train[self.X_train.sex == 1]['chol'], self.X_train[self.X_train.sex == 1]['trestbps'], yhat_0,
+        ax1.plot_trisurf(df['chol'], df['thalach'], df['p_disease'], cmap=plt.cm.coolwarm, linewidth=0.001, alpha=0.85)
+        ax1.scatter(self.X_train[self.X_train.sex == 1]['chol'], self.X_train[self.X_train.sex == 1]['thalach'], yhat_0,
         c='black', s=30)
 
         # Decorations
         ax1.set_xlabel('Cholesterol', fontsize=9)
         ax1.tick_params(axis='x', rotation=0, labelsize=8)
-        ax1.set_ylabel('Resting Heart Rate', color='black', fontsize=9)
+        ax1.set_ylabel('Thalach', color='black', fontsize=9)
         ax1.tick_params(axis='y', rotation=0, labelsize=8)
         ax1.set_zlabel('Probability of Heart Disease', color='black', fontsize=9)
         ax1.tick_params(axis='z', rotation=0, labelsize=8)
@@ -369,8 +369,8 @@ class HeartDiseaseModels():
         self.classification_reports()
         self.gen_error_graphics()
         self.map_decision_space(name='logreg', mdl_id=0)
-        #self.map_decision_space(name='random_forest', mdl_id=1)
-        #self.map_decision_space(name='adaboost_trees', mdl_id=2)
+        self.map_decision_space(name='random_forest', mdl_id=1)
+        self.map_decision_space(name='adaboost_trees', mdl_id=2)
 
 def main():
 
