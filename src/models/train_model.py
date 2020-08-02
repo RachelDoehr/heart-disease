@@ -353,6 +353,7 @@ class HeartDiseaseModels():
         plt.title('Learned Decision Space: '+name, fontsize=12, fontweight='bold')
         pth = Path(self.graphics_path, 'probability_plot_'+name).with_suffix('.png')
         plt.savefig(pth)
+        plt.show()
         plt.close()
         
         self.logger.info('plotted and save probability plot for one model in /reports/figures...')
@@ -368,8 +369,8 @@ class HeartDiseaseModels():
         self.classification_reports()
         self.gen_error_graphics()
         self.map_decision_space(name='logreg', mdl_id=0)
-        self.map_decision_space(name='random_forest', mdl_id=1)
-        self.map_decision_space(name='adaboost_trees', mdl_id=2)
+        #self.map_decision_space(name='random_forest', mdl_id=1)
+        #self.map_decision_space(name='adaboost_trees', mdl_id=2)
 
 def main():
 
