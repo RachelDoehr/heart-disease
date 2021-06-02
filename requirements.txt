@@ -63,6 +63,6 @@ Theano==1.0.4
 threadpoolctl==2.1.0
 tqdm==4.45.0
 tweepy==3.7.0
-urllib3==1.24.2
+urllib3==1.26.5
 whichcraft==0.6.1
 wrapt==1.11.1
